@@ -29,8 +29,25 @@ class WaitingQueueOperations:
         Space: O(1)
         """
         waiting_node = WaitingQueueNode(patient_id, priority_snapshot)
-        waiting_queue.queue.append(waiting_node)
-        return True
+
+        # No direct append available so we are manually going to do that logic 
+        if priority_snapshot == 1:
+            waiting_queue.queue.appendleft(waiting_node)
+            return True
+        elif priority_snapshot == 2:
+            if len(waiting_queue.queue) == 0:
+                waiting_queue.queue.append(waiting_node)
+                return True
+            else:
+                for index, node in enumerate(waiting_queue.queue):
+                    if node.priority_snapshot == 3:
+                        waiting_queue.queue.insert(index, waiting_node)
+                        return True
+                waiting_queue.queue.append(waiting_node)
+                return True
+        else:    
+            waiting_queue.queue.append(waiting_node)
+            return True
     
     @staticmethod
     def dequeue(waiting_queue: WaitingQueueFIFO) -> Optional[str]:
@@ -42,12 +59,8 @@ class WaitingQueueOperations:
         
         Time: O(1) if using collections.deque, O(n) if using list.pop(0)
         Space: O(1)
-        
-        NOTE: Consider using collections.deque for true O(1) dequeue
-        Or use list.pop(0) for simplicity (acceptable for small queues)
         """
         if waiting_queue.queue:
-            # Support deque (popleft) or list (pop(0))
             waiting_node = waiting_queue.queue.popleft()
             return waiting_node.patient_id
         return None
