@@ -20,7 +20,33 @@ class DoctorHeapOperations:
     
     @staticmethod
     def get_priority(doctor: Doctor) -> int:
-        return doctor.experience_years - doctor.current_workload
+        return doctor.experience_years / (doctor.current_workload + 1)
+        # return doctor.experience_years - doctor.current_workload
+    
+    @staticmethod
+    def is_available(doctor: Doctor) -> bool:
+        """Check if doctor can accept more patients (workload < max_capacity)"""
+        return doctor.current_workload < doctor.max_capacity
+    
+    @staticmethod
+    def find_best_available_doctor(doctor_heap: DoctorMaxHeap) -> Optional[Doctor]:
+        """
+        Find best doctor who can still accept patients
+        
+        Algorithm:
+        1. Iterate through heap (in priority order, not strictly sorted)
+        2. Find first doctor where current_workload < max_capacity
+        3. Return that doctor
+        4. If none available, return None
+        
+        Time: O(n) worst case, but typically O(1-log n) in practice
+        Space: O(1)
+        """
+        # Try to find available doctor starting from heap
+        for doctor in doctor_heap.heap:
+            if DoctorHeapOperations.is_available(doctor):
+                return doctor
+        return None
     
     @staticmethod
     def insert_doctor(doctor_heap: DoctorMaxHeap, doctor: Doctor) -> None:
@@ -89,7 +115,6 @@ class DoctorHeapOperations:
         Time: O(log n)
         Space: O(1)
         
-        Hint: Use heapify_down() helper
         """
         if not doctor_heap.heap:
             return None
@@ -148,8 +173,6 @@ class DoctorHeapOperations:
             doctor_heap.doctor_map[doctor_heap.heap[index].doctor_id] = index
             doctor_heap.doctor_map[doctor_heap.heap[largest].doctor_id] = largest
             index = largest
-        
-
     
     @staticmethod
     def peek_max(doctor_heap: DoctorMaxHeap) -> Optional[Doctor]:

@@ -83,24 +83,29 @@ class ICUAllocator:
         
         print(f"✓ Patient {patient_id} admitted to system")
         
-        # Try immediate allocation
+        # Check available resources
         free_bed_id = BedArrayOperations.find_free_bed(self.system.beds)
-        
-        if free_bed_id is not None:
-            # Bed available - allocate immediately
+        available_doctor = DoctorHeapOperations.find_best_available_doctor(self.system.doctors)
+
+        # If both bed and doctor available, attempt allocation
+        if free_bed_id is not None and available_doctor is not None:
             success, msg = self._allocate_to_icu(patient)
-            return (True, f"Admitted and allocated: {msg}")
-        else:
-            # No bed - add to waiting queue
-            WaitingQueueOperations.enqueue(
-                self.system.waiting_queue, 
-                patient_id, 
-                severity_level
-            )
-            patient.status = PatientStatus.WAITING
-            queue_size = WaitingQueueOperations.get_size(self.system.waiting_queue)
-            print(f"⏳ No beds available. Patient {patient_id} added to waiting queue (position {queue_size})")
-            return (True, f"Admitted to waiting queue (position {queue_size})")
+            if success:
+                return (True, f"Admitted and allocated: {msg}")
+            # Allocation failed (e.g., race), fall through to queue
+            print(f"⏳ Allocation failed: {msg}. Queuing patient {patient_id}.")
+
+        # Queue patient when bed missing or doctor at capacity or allocation failed
+        WaitingQueueOperations.enqueue(
+            self.system.waiting_queue,
+            patient_id,
+            severity_level
+        )
+        patient.status = PatientStatus.WAITING
+        queue_size = WaitingQueueOperations.get_size(self.system.waiting_queue)
+        reason = "no beds" if free_bed_id is None else "no doctors available (at capacity)"
+        print(f"⏳ {reason.title()}. Patient {patient_id} added to waiting queue (position {queue_size})")
+        return (True, f"Admitted to waiting queue (position {queue_size})")
     
     # ICU ALLOCATION
     def _allocate_to_icu(self, patient: Patient) -> Tuple[bool, str]:
@@ -109,12 +114,13 @@ class ICUAllocator:
         
         Algorithm:
         1. Find free bed
-        2. Find best available doctor (from heap)
-        3. Allocate bed
-        4. Update doctor workload
-        5. Update patient record
-        6. Log allocation
-        7. Return success
+        2. Find best AVAILABLE doctor (capacity < max_workload)
+        3. If no available doctor, queue patient
+        4. Allocate bed
+        5. Update doctor workload
+        6. Update patient record
+        7. Log allocation
+        8. Return success
         
         Args:
             patient: Patient object to allocate
@@ -124,13 +130,13 @@ class ICUAllocator:
         """
         # Find resources
         free_bed_id = BedArrayOperations.find_free_bed(self.system.beds)
-        best_doctor = DoctorHeapOperations.peek_max(self.system.doctors)
+        best_doctor = DoctorHeapOperations.find_best_available_doctor(self.system.doctors)
         
         if free_bed_id is None:
             return (False, "No beds available")
         
         if best_doctor is None:
-            return (False, "No doctors available")
+            return (False, "No doctors available (all at capacity)")
         
         # Allocate bed
         BedArrayOperations.allocate_bed(
