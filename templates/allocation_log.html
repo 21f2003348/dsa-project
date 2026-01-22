@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Allocation Log - ICU Management System{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 30px; color: var(--dark); display: flex; align-items: center; gap: 12px;">
+    <i class="fas fa-history" style="color: var(--secondary);"></i>
+    Allocation History Log
+</h2>
+
+<div style="margin-bottom: 20px;">
+    <a href="/reports/export" class="btn btn-primary">
+        <i class="fas fa-download"></i> Export as CSV
+    </a>
+</div>
+
+{% if allocations %}
+<div class="card">
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Record ID</th>
+                    <th>Patient ID</th>
+                    <th>Bed ID</th>
+                    <th>Doctor ID</th>
+                    <th>Severity</th>
+                    <th>Doctor Priority</th>
+                    <th>Allocation Time</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in allocations %}
+                <tr>
+                    <td><strong>{{ record.record_id }}</strong></td>
+                    <td>
+                        <span class="badge badge-info">{{ record.patient_id }}</span>
+                    </td>
+                    <td>
+                        <i class="fas fa-bed"></i> {{ record.bed_id }}
+                    </td>
+                    <td>
+                        <i class="fas fa-user-md"></i> {{ record.doctor_id }}
+                    </td>
+                    <td>
+                        <span
+                            class="badge {% if record.patient_severity >= 8 %}badge-danger{% elif record.patient_severity >= 5 %}badge-warning{% else %}badge-success{% endif %}">
+                            {{ record.patient_severity }}/10
+                        </span>
+                    </td>
+                    <td>{{ "%.2f"|format(record.doctor_priority_score) }}</td>
+                    <td>{{ record.allocation_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>
+                        <span class="badge badge-success">
+                            {{ record.decision_reason.value }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Statistics -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 30px;">
+    <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <h4 style="opacity: 0.9; margin-bottom: 10px;">Total Allocations</h4>
+        <h2 style="font-size: 2.5rem; font-weight: 700;">{{ allocations|length }}</h2>
+    </div>
+
+    <div class="card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+        <h4 style="opacity: 0.9; margin-bottom: 10px;">Average Severity</h4>
+        <h2 style="font-size: 2.5rem; font-weight: 700;">
+            {{ "%.1f"|format((allocations|sum(attribute='patient_severity'))/allocations|length if allocations else 0)
+            }}
+        </h2>
+    </div>
+
+    <div class="card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+        <h4 style="opacity: 0.9; margin-bottom: 10px;">Latest Allocation</h4>
+        <h2 style="font-size: 1.2rem; font-weight: 700;">
+            {{ allocations[0].allocation_time.strftime('%H:%M:%S') if allocations else 'N/A' }}
+        </h2>
+    </div>
+
+    <div class="card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+        <h4 style="opacity: 0.9; margin-bottom: 10px;">Avg Doctor Priority</h4>
+        <h2 style="font-size: 2.5rem; font-weight: 700;">
+            {{ "%.2f"|format((allocations|sum(attribute='doctor_priority_score'))/allocations|length if allocations else
+            0) }}
+        </h2>
+    </div>
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 60px;">
+    <i class="fas fa-clipboard-list"
+        style="font-size: 4rem; color: var(--gray); opacity: 0.3; margin-bottom: 20px;"></i>
+    <h3 style="color: var(--gray); margin-bottom: 10px;">No Allocation Records</h3>
+    <p style="color: var(--gray);">Allocation history will appear here once patients are admitted.</p>
+    <a href="/patients/admit" class="btn btn-primary" style="margin-top: 20px;">
+        <i class="fas fa-user-plus"></i> Admit Patient
+    </a>
+</div>
+{% endif %}
+{% endblock %}

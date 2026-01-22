@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Waiting Queue - ICU Management System{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 30px; color: var(--dark); display: flex; align-items: center; gap: 12px;">
+    <i class="fas fa-clock" style="color: var(--warning);"></i>
+    Patient Waiting Queue
+</h2>
+
+{% if queue %}
+<div class="card" style="margin-bottom: 30px;">
+    <div
+        style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="margin-bottom: 10px;">
+            <i class="fas fa-users"></i> {{ queue|length }} Patient(s) Waiting
+        </h3>
+        <p style="opacity: 0.9;">Patients are prioritized by severity level. Higher severity patients will be allocated
+            first when beds become available.</p>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Position</th>
+                    <th>Patient ID</th>
+                    <th>Name</th>
+                    <th>Age</th>
+                    <th>Severity</th>
+                    <th>Enqueued At</th>
+                    <th>Wait Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in queue %}
+                <tr>
+                    <td>
+                        <span style="font-size: 1.2rem; font-weight: 700; color: var(--primary);">
+                            #{{ item.position }}
+                        </span>
+                    </td>
+                    <td><strong>{{ item.patient.patient_id }}</strong></td>
+                    <td>{{ item.patient.name }}</td>
+                    <td>{{ item.patient.age }}</td>
+                    <td>
+                        <span
+                            class="badge {% if item.patient.severity_level >= 8 %}badge-danger{% elif item.patient.severity_level >= 5 %}badge-warning{% else %}badge-success{% endif %}">
+                            {{ item.patient.severity_level }}/10
+                        </span>
+                    </td>
+                    <td>{{ item.enqueue_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>
+                        <strong
+                            style="color: {% if item.wait_time > 60 %}var(--danger){% elif item.wait_time > 30 %}var(--warning){% else %}var(--success){% endif %};">
+                            {{ "%.1f"|format(item.wait_time) }} min
+                        </strong>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Patient Details Cards -->
+<h3 style="margin-bottom: 20px; color: var(--dark);">Patient Details</h3>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+    {% for item in queue %}
+    <div class="card"
+        style="border-left: 4px solid {% if item.patient.severity_level >= 8 %}var(--danger){% elif item.patient.severity_level >= 5 %}var(--warning){% else %}var(--success){% endif %};">
+        <div style="display: flex; justify-content: between; align-items: start; margin-bottom: 15px;">
+            <div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <span
+                        style="background: var(--primary); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">
+                        {{ item.position }}
+                    </span>
+                    <h3 style="color: var(--dark);">{{ item.patient.name }}</h3>
+                </div>
+                <span
+                    class="badge {% if item.patient.severity_level >= 8 %}badge-danger{% elif item.patient.severity_level >= 5 %}badge-warning{% else %}badge-success{% endif %}">
+                    Severity: {{ item.patient.severity_level }}/10
+                </span>
+            </div>
+        </div>
+
+        <div style="background: var(--light); padding: 15px; border-radius: 8px; margin-bottom: 10px;">
+            <div style="font-size: 0.9rem; color: var(--gray);">
+                <div style="margin-bottom: 8px;">
+                    <i class="fas fa-id-card"></i> <strong>ID:</strong> {{ item.patient.patient_id }}
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <i class="fas fa-birthday-cake"></i> <strong>Age:</strong> {{ item.patient.age }} years
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <i class="fas fa-clock"></i> <strong>Waiting:</strong>
+                    <span
+                        style="color: {% if item.wait_time > 60 %}var(--danger){% elif item.wait_time > 30 %}var(--warning){% else %}var(--success){% endif %}; font-weight: 600;">
+                        {{ "%.1f"|format(item.wait_time) }} minutes
+                    </span>
+                </div>
+                <div>
+                    <i class="fas fa-calendar"></i> <strong>Enqueued:</strong> {{ item.enqueue_time.strftime('%H:%M:%S')
+                    }}
+                </div>
+            </div>
+        </div>
+
+        {% if item.patient.medical_notes %}
+        <div style="padding: 10px; background: #fff3cd; border-radius: 8px; border-left: 3px solid var(--warning);">
+            <div style="font-size: 0.85rem; color: var(--dark);">
+                <strong><i class="fas fa-notes-medical"></i> Notes:</strong><br>
+                {{ item.patient.medical_notes }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 60px;">
+    <i class="fas fa-check-circle"
+        style="font-size: 4rem; color: var(--success); opacity: 0.3; margin-bottom: 20px;"></i>
+    <h3 style="color: var(--gray); margin-bottom: 10px;">No Patients Waiting</h3>
+    <p style="color: var(--gray);">All patients have been allocated beds or there are no pending admissions.</p>
+    <a href="/patients/admit" class="btn btn-primary" style="margin-top: 20px;">
+        <i class="fas fa-user-plus"></i> Admit Patient
+    </a>
+</div>
+{% endif %}
+{% endblock %}

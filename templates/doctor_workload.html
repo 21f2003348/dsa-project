@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Doctor Workload - ICU Management System{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 30px; color: var(--dark); display: flex; align-items: center; gap: 12px;">
+    <i class="fas fa-user-md" style="color: var(--primary);"></i>
+    Doctor Workload Management
+</h2>
+
+<div style="margin-bottom: 20px;">
+    <a href="/doctors/add" class="btn btn-success">
+        <i class="fas fa-plus"></i> Add New Doctor
+    </a>
+</div>
+
+{% if doctors %}
+<div class="card">
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Doctor ID</th>
+                    <th>Name</th>
+                    <th>Experience</th>
+                    <th>Specialization</th>
+                    <th>Workload</th>
+                    <th>Utilization</th>
+                    <th>Priority Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in doctors %}
+                <tr>
+                    <td><strong>{{ item.doctor.doctor_id }}</strong></td>
+                    <td>{{ item.doctor.name }}</td>
+                    <td>{{ item.doctor.experience_years }} years</td>
+                    <td>
+                        <span class="badge badge-info">
+                            {{ item.doctor.specialization.value }}
+                        </span>
+                    </td>
+                    <td>
+                        {{ item.doctor.current_workload }} / {{ item.doctor.max_capacity }}
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div
+                                style="flex: 1; background: var(--border); height: 20px; border-radius: 10px; overflow: hidden;">
+                                <div style="width: {{ item.utilization }}%; height: 100%; 
+                                                    background: {% if item.utilization >= 90 %}var(--danger){% elif item.utilization >= 70 %}var(--warning){% else %}var(--success){% endif %};
+                                                    transition: width 0.3s ease;"></div>
+                            </div>
+                            <span style="font-weight: 600; min-width: 50px;">{{ "%.0f"|format(item.utilization)
+                                }}%</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge badge-success">
+                            {{ "%.2f"|format(item.priority) }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Doctor Statistics -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 30px;">
+    <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <h4 style="opacity: 0.9; margin-bottom: 10px;">Total Doctors</h4>
+        <h2 style="font-size: 2.5rem; font-weight: 700;">{{ doctors|length }}</h2>
+    </div>
+
+    <div class="card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+        <h4 style="opacity: 0.9; margin-bottom: 10px;">Average Utilization</h4>
+        <h2 style="font-size: 2.5rem; font-weight: 700;">
+            {{ "%.1f"|format((doctors|sum(attribute='utilization'))/doctors|length if doctors else 0) }}%
+        </h2>
+    </div>
+
+    <div class="card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+        <h4 style="opacity: 0.9; margin-bottom: 10px;">Total Capacity</h4>
+        <h2 style="font-size: 2.5rem; font-weight: 700;">
+            {{ doctors|sum(attribute='doctor.max_capacity') }}
+        </h2>
+    </div>
+
+    <div class="card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+        <h4 style="opacity: 0.9; margin-bottom: 10px;">Current Workload</h4>
+        <h2 style="font-size: 2.5rem; font-weight: 700;">
+            {{ doctors|sum(attribute='doctor.current_workload') }}
+        </h2>
+    </div>
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 60px;">
+    <i class="fas fa-user-md" style="font-size: 4rem; color: var(--gray); opacity: 0.3; margin-bottom: 20px;"></i>
+    <h3 style="color: var(--gray); margin-bottom: 10px;">No Doctors Added</h3>
+    <p style="color: var(--gray);">Add doctors to start managing ICU operations.</p>
+    <a href="/doctors/add" class="btn btn-success" style="margin-top: 20px;">
+        <i class="fas fa-plus"></i> Add First Doctor
+    </a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}System Status - ICU Management System{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 30px; color: var(--dark); display: flex; align-items: center; gap: 12px;">
+    <i class="fas fa-server" style="color: var(--primary);"></i>
+    System Status Overview
+</h2>
+
+<div
+    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px;">
+    <!-- Bed Status -->
+    <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <h3 style="margin-bottom: 20px; opacity: 0.9;">
+            <i class="fas fa-bed"></i> Bed Status
+        </h3>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span>Total Beds:</span>
+            <strong style="font-size: 1.5rem;">{{ status.total_beds }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span>Occupied:</span>
+            <strong style="font-size: 1.5rem;">{{ status.occupied_beds }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span>Available:</span>
+            <strong style="font-size: 1.5rem;">{{ status.available_beds }}</strong>
+        </div>
+    </div>
+
+    <!-- Patient Status -->
+    <div class="card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+        <h3 style="margin-bottom: 20px; opacity: 0.9;">
+            <i class="fas fa-users"></i> Patient Status
+        </h3>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span>Total Patients:</span>
+            <strong style="font-size: 1.5rem;">{{ status.total_patients }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span>In ICU:</span>
+            <strong style="font-size: 1.5rem;">{{ status.occupied_beds }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span>In Queue:</span>
+            <strong style="font-size: 1.5rem;">{{ status.waiting_queue_size }}</strong>
+        </div>
+    </div>
+
+    <!-- Doctor Status -->
+    <div class="card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+        <h3 style="margin-bottom: 20px; opacity: 0.9;">
+            <i class="fas fa-user-md"></i> Doctor Status
+        </h3>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span>Total Doctors:</span>
+            <strong style="font-size: 1.5rem;">{{ status.total_doctors }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span>Avg Workload:</span>
+            <strong style="font-size: 1.5rem;">{{ "%.1f"|format(status.average_doctor_workload) }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span>Capacity:</span>
+            <strong style="font-size: 1.5rem;">{{ status.total_doctor_capacity }}</strong>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Metrics -->
+<div class="card">
+    <h3 style="margin-bottom: 20px; color: var(--dark);">
+        <i class="fas fa-chart-line"></i> Detailed Metrics
+    </h3>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+        <div>
+            <h4 style="color: var(--dark); margin-bottom: 15px;">Occupancy Metrics</h4>
+            <div style="background: var(--light); padding: 20px; border-radius: 8px;">
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Bed Occupancy Rate</span>
+                        <strong>{{ "%.1f"|format(status.occupancy_rate) }}%</strong>
+                    </div>
+                    <div style="background: var(--border); height: 10px; border-radius: 5px; overflow: hidden;">
+                        <div
+                            style="width: {{ status.occupancy_rate }}%; height: 100%; 
+                                    background: {% if status.occupancy_rate >= 90 %}var(--danger){% elif status.occupancy_rate >= 70 %}var(--warning){% else %}var(--success){% endif %};">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Doctor Utilization</span>
+                        <strong>{{ "%.1f"|format((status.average_doctor_workload / status.total_doctor_capacity * 100)
+                            if status.total_doctor_capacity > 0 else 0) }}%</strong>
+                    </div>
+                    <div style="background: var(--border); height: 10px; border-radius: 5px; overflow: hidden;">
+                        {% set doctor_util = (status.average_doctor_workload / status.total_doctor_capacity * 100) if
+                        status.total_doctor_capacity > 0 else 0 %}
+                        <div
+                            style="width: {{ doctor_util }}%; height: 100%; 
+                                    background: {% if doctor_util >= 90 %}var(--danger){% elif doctor_util >= 70 %}var(--warning){% else %}var(--success){% endif %};">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <h4 style="color: var(--dark); margin-bottom: 15px;">System Information</h4>
+            <div style="background: var(--light); padding: 20px; border-radius: 8px;">
+                <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+                    <div style="color: var(--gray); font-size: 0.9rem;">Total Allocations</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--dark);">{{ status.total_allocations }}
+                    </div>
+                </div>
+                <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+                    <div style="color: var(--gray); font-size: 0.9rem;">Waiting Queue Size</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--dark);">{{ status.waiting_queue_size
+                        }}</div>
+                </div>
+                <div>
+                    <div style="color: var(--gray); font-size: 0.9rem;">System Status</div>
+                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--success);">
+                        <i class="fas fa-check-circle"></i> Operational
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Structure Info -->
+<div class="card" style="margin-top: 30px; background: var(--light);">
+    <h3 style="margin-bottom: 20px; color: var(--dark);">
+        <i class="fas fa-code"></i> Data Structures in Use
+    </h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+        <div style="padding: 15px; background: white; border-radius: 8px; border-left: 4px solid var(--primary);">
+            <h4 style="color: var(--primary); margin-bottom: 5px;">
+                <i class="fas fa-bed"></i> Bed Management
+            </h4>
+            <p style="color: var(--gray); font-size: 0.9rem;">Array-based structure for O(1) access</p>
+        </div>
+        <div style="padding: 15px; background: white; border-radius: 8px; border-left: 4px solid var(--success);">
+            <h4 style="color: var(--success); margin-bottom: 5px;">
+                <i class="fas fa-user-md"></i> Doctor Allocation
+            </h4>
+            <p style="color: var(--gray); font-size: 0.9rem;">Max Heap for priority-based selection</p>
+        </div>
+        <div style="padding: 15px; background: white; border-radius: 8px; border-left: 4px solid var(--warning);">
+            <h4 style="color: var(--warning); margin-bottom: 5px;">
+                <i class="fas fa-users"></i> Patient Records
+            </h4>
+            <p style="color: var(--gray); font-size: 0.9rem;">Linked List for dynamic management</p>
+        </div>
+        <div style="padding: 15px; background: white; border-radius: 8px; border-left: 4px solid var(--danger);">
+            <h4 style="color: var(--danger); margin-bottom: 5px;">
+                <i class="fas fa-clock"></i> Waiting Queue
+            </h4>
+            <p style="color: var(--gray); font-size: 0.9rem;">Priority Queue sorted by severity</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

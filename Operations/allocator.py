@@ -24,6 +24,10 @@ from Prototype.Operations.bed import BedArrayOperations
 from Prototype.Operations.doctor import DoctorHeapOperations
 from Prototype.Operations.queue import WaitingQueueOperations
 from Prototype.Operations.log import AllocationLogOperations
+from Prototype.sync import (
+    save_patient_to_db, save_bed_to_db, save_doctor_to_db, 
+    save_allocation_to_db, save_to_waiting_queue_db, remove_from_waiting_queue_db
+)
 from typing import Optional, Tuple
 from datetime import datetime
 
@@ -51,7 +55,9 @@ class ICUAllocator:
         name: str,
         age: int,
         severity_level: int,
-        medical_notes: str = ""
+        medical_notes: str = "",
+        needs_bed: bool = True,
+        bed_type: str = "GENERAL"
     ) -> Tuple[bool, str]:
         """
         Admit new patient to ICU system
@@ -59,17 +65,19 @@ class ICUAllocator:
         Algorithm:
         1. Create patient record
         2. Add to patient linked list
-        3. Check if bed available:
+        3. Save patient to DB
+        4. If needs_bed is False: return success
+        5. Check if bed available:
            - If yes: allocate immediately
            - If no: add to waiting queue
-        4. Return success status and message
         
         Args:
             patient_id: Unique patient identifier
             name: Patient name
             age: Patient age
-            severity_level: Urgency (1=Critical, 5=Stable)
+            severity_level: Urgency (1=Critical, 10=Stable)
             medical_notes: Clinical notes
+            needs_bed: Whether patient requires ICU bed
         
         Returns:
             (success: bool, message: str)
@@ -81,90 +89,135 @@ class ICUAllocator:
         PatientListOperations.insert_at_tail(self.system.patients, patient)
         self.system.total_patients_admitted += 1
         
+        # Save to DB
+        save_patient_to_db(patient)
+        
         print(f"✓ Patient {patient_id} admitted to system")
         
-        # Check available resources
-        free_bed_id = BedArrayOperations.find_free_bed(self.system.beds)
+        # If bed not needed, assign doctor if available
+        if not needs_bed:
+            available_doctor = DoctorHeapOperations.find_best_available_doctor(self.system.doctors)
+            if available_doctor is not None:
+                # Assign doctor
+                available_doctor.current_workload += 1
+                available_doctor.assigned_patients.append(patient.patient_id)
+                # Re-heapify doctor (workload changed)
+                DoctorHeapOperations.update_doctor_workload(
+                    self.system.doctors,
+                    available_doctor.doctor_id,
+                    available_doctor.current_workload
+                )
+                patient.status = PatientStatus.STABLE
+                patient.assigned_doctor_id = available_doctor.doctor_id
+                save_patient_to_db(patient)
+                save_doctor_to_db(available_doctor)
+                return (True, f"Patient {patient_id} registered and assigned to Dr. {available_doctor.name}")
+            else:
+                patient.status = PatientStatus.STABLE
+                save_patient_to_db(patient)
+                return (True, f"Patient {patient_id} registered (No bed required, no doctor available)")
+
+        # Check available resources for requested bed type using BedArrayOperations
+        free_bed_id = BedArrayOperations.find_free_bed(
+            self.system.beds,
+            bed_type.upper()
+        )
         available_doctor = DoctorHeapOperations.find_best_available_doctor(self.system.doctors)
 
         # If both bed and doctor available, attempt allocation
         if free_bed_id is not None and available_doctor is not None:
-            success, msg = self._allocate_to_icu(patient)
+            success, msg = self._allocate_to_icu(patient, bed_type)
             if success:
                 return (True, f"Admitted and allocated: {msg}")
             # Allocation failed (e.g., race), fall through to queue
             print(f"⏳ Allocation failed: {msg}. Queuing patient {patient_id}.")
 
         # Queue patient when bed missing or doctor at capacity or allocation failed
+        # Store requested bed type for later matching
+        setattr(patient, 'requested_bed_type', bed_type)
+        
+        # Also store in medical notes for persistence across DB reloads
+        if patient.medical_notes:
+            # Remove old REQUESTED_BED_TYPE if exists
+            lines = patient.medical_notes.split('\n')
+            lines = [line for line in lines if not line.startswith('REQUESTED_BED_TYPE:')]
+            patient.medical_notes = '\n'.join(lines)
+        if not patient.medical_notes:
+            patient.medical_notes = ""
+        patient.medical_notes += f"\nREQUESTED_BED_TYPE:{bed_type}"
+        
         WaitingQueueOperations.enqueue(
             self.system.waiting_queue,
             patient_id,
             severity_level
         )
         patient.status = PatientStatus.WAITING
+        save_patient_to_db(patient)
+
         queue_size = WaitingQueueOperations.get_size(self.system.waiting_queue)
+
+        # Save to Queue DB
+        save_to_waiting_queue_db(patient_id, severity_level, queue_size)
+
         reason = "no beds" if free_bed_id is None else "no doctors available (at capacity)"
         print(f"⏳ {reason.title()}. Patient {patient_id} added to waiting queue (position {queue_size})")
         return (True, f"Admitted to waiting queue (position {queue_size})")
     
     # ICU ALLOCATION
-    def _allocate_to_icu(self, patient: Patient) -> Tuple[bool, str]:
+    def _allocate_to_icu(self, patient: Patient, bed_type: str = "GENERAL") -> Tuple[bool, str]:
         """
-        Internal: Allocate bed and doctor to patient
+        Allocate patient to ICU bed and doctor
         
-        Algorithm:
-        1. Find free bed
-        2. Find best AVAILABLE doctor (capacity < max_workload)
-        3. If no available doctor, queue patient
-        4. Allocate bed
-        5. Update doctor workload
-        6. Update patient record
-        7. Log allocation
-        8. Return success
-        
-        Args:
-            patient: Patient object to allocate
-        
-        Returns:
-            (success: bool, message: str)
+        Uses Operations from Operations folder:
+        - BedArrayOperations.find_free_bed() and allocate_bed()
+        - DoctorHeapOperations.find_best_available_doctor()
+        - AllocationLogOperations.append_record()
         """
-        # Find resources
-        free_bed_id = BedArrayOperations.find_free_bed(self.system.beds)
+        # Find free bed of requested type using BedArrayOperations
+        free_bed_id = BedArrayOperations.find_free_bed(
+            self.system.beds, 
+            bed_type.upper()
+        )
+        
+        # Find best available doctor using DoctorHeapOperations
         best_doctor = DoctorHeapOperations.find_best_available_doctor(self.system.doctors)
-        
+
         if free_bed_id is None:
-            return (False, "No beds available")
-        
+            return (False, f"No {bed_type} beds available")
+
         if best_doctor is None:
             return (False, "No doctors available (all at capacity)")
-        
-        # Allocate bed
-        BedArrayOperations.allocate_bed(
+
+        # Allocate bed using BedArrayOperations
+        success = BedArrayOperations.allocate_bed(
             self.system.beds, 
             free_bed_id, 
             patient.patient_id
         )
         
+        if not success:
+            return (False, "Failed to allocate bed")
+
         # Update doctor workload
         best_doctor.current_workload += 1
         best_doctor.assigned_patients.append(patient.patient_id)
-        
+
         # Re-heapify doctor (workload changed, priority decreased)
         DoctorHeapOperations.update_doctor_workload(
             self.system.doctors,
             best_doctor.doctor_id,
             best_doctor.current_workload
         )
-        
+
         # Update patient record
         patient.status = PatientStatus.IN_ICU
         patient.assigned_bed_id = free_bed_id
         patient.assigned_doctor_id = best_doctor.doctor_id
         patient.assignment_time = datetime.now()
-        
-        # Log allocation
+
+        # Log allocation using AllocationLogOperations
         doctor_priority = DoctorHeapOperations.get_priority(best_doctor)
-        AllocationLogOperations.append_record(
+        record = AllocationLogOperations.append_record(
             self.system.allocation_log,
             patient.patient_id,
             free_bed_id,
@@ -174,9 +227,15 @@ class ICUAllocator:
             AllocationReason.AUTOMATIC
         )
         
-        print(f"✓ Allocated: Patient {patient.patient_id} → Bed {free_bed_id} + Dr.{best_doctor.name}")
+        print(f"✓ Allocated: Patient {patient.patient_id} → Bed {free_bed_id} ({bed_type}) + Dr.{best_doctor.name}")
         
-        return (True, f"Bed {free_bed_id} + {best_doctor.name}")
+        # PERSIST DATA TO DB - Call DB for every update
+        save_bed_to_db(self.system.beds.beds[free_bed_id])
+        save_doctor_to_db(best_doctor)
+        save_patient_to_db(patient)
+        save_allocation_to_db(record)
+        
+        return (True, f"Bed {free_bed_id} ({bed_type}) + {best_doctor.name}")
     
     # PATIENT DISCHARGE   
     def discharge_patient(self, patient_id: str) -> Tuple[bool, str]:
@@ -214,14 +273,23 @@ class ICUAllocator:
         bed_id = patient.assigned_bed_id
         doctor_id = patient.assigned_doctor_id
         
+        # Get the type of bed being freed
+        bed_type = None
+        for bed in self.system.beds.beds:
+            if bed.bed_id == bed_id:
+                bed_type = bed.bed_type.value
+                break
         # Release bed
         BedArrayOperations.release_bed(self.system.beds, bed_id)
         
-        # Update doctor workload
+        # Update doctor workload - decrease workload on discharge
         doctor_found = False
+        doctor_to_save = None
         for doc in self.system.doctors.heap:
             if doc.doctor_id == doctor_id:
-                doc.current_workload -= 1
+                # Decrease workload
+                if doc.current_workload > 0:
+                    doc.current_workload -= 1
                 if patient_id in doc.assigned_patients:
                     doc.assigned_patients.remove(patient_id)
 
@@ -233,6 +301,7 @@ class ICUAllocator:
                 )
 
                 doctor_found = True
+                doctor_to_save = doc
                 break
         
         if not doctor_found:
@@ -244,13 +313,18 @@ class ICUAllocator:
         patient.assigned_bed_id = None
         patient.assigned_doctor_id = None
         
+        # PERSIST DATA TO DB (Discharge updates) - Call DB for every update
+        save_bed_to_db(self.system.beds.beds[bed_id])
+        if doctor_found and doctor_to_save:
+            save_doctor_to_db(doctor_to_save)
+        save_patient_to_db(patient)
+        
         print(f"✓ Patient {patient_id} discharged from Bed {bed_id}")
-        
-        # Process waiting queue
-        waiting_size = WaitingQueueOperations.get_size(self.system.waiting_queue)
-        if waiting_size > 0:
-            self._process_waiting_queue()
-        
+
+        # Process waiting queue - try to allocate to waiting patients
+        # Queue is already sorted by severity (highest priority first)
+        self._process_waiting_queue_after_discharge(bed_type)
+
         return (True, f"Discharged from Bed {bed_id}")
     
     # WAITING QUEUE PROCESSING    
@@ -259,7 +333,7 @@ class ICUAllocator:
         Internal: Allocate next waiting patient to ICU
         
         Algorithm:
-        1. Dequeue next patient (FIFO)
+        1. Dequeue next patient (sorted by severity)
         2. Find patient in list
         3. Allocate to ICU
         4. Log decision
@@ -267,8 +341,12 @@ class ICUAllocator:
         if WaitingQueueOperations.is_empty(self.system.waiting_queue):
             return
         
-        # Get next waiting patient
+        # Get next waiting patient (highest priority first due to severity sorting)
         next_patient_id = WaitingQueueOperations.dequeue(self.system.waiting_queue)
+        
+        # Remove from Queue DB
+        if next_patient_id:
+            remove_from_waiting_queue_db(next_patient_id)
         
         if next_patient_id is None:
             return
@@ -283,18 +361,83 @@ class ICUAllocator:
             print(f"⚠ Warning: Waiting patient {next_patient_id} not found in list")
             return
         
+        # Get requested bed type if stored
+        requested_bed_type = getattr(patient, 'requested_bed_type', 'GENERAL')
+        
         # Allocate to ICU
         print(f"→ Processing waiting patient {next_patient_id}")
-        success, msg = self._allocate_to_icu(patient)
+        success, msg = self._allocate_to_icu(patient, requested_bed_type)
         
         if not success:
             print(f"⚠ Failed to allocate waiting patient: {msg}")
-            # Re-queue if allocation failed
+            # Re-queue if allocation failed (will maintain severity order)
             WaitingQueueOperations.enqueue(
                 self.system.waiting_queue,
                 next_patient_id,
                 patient.severity_level
             )
+            # Re-add to DB
+            queue_size = WaitingQueueOperations.get_size(self.system.waiting_queue)
+            save_to_waiting_queue_db(next_patient_id, patient.severity_level, queue_size)
+    
+    def _process_waiting_queue_after_discharge(self, freed_bed_type: str) -> None:
+        """
+        Process waiting queue after a bed is freed
+        
+        Algorithm:
+        1. Check waiting queue (sorted by severity)
+        2. For each waiting patient, check if they need the freed bed type
+        3. Try to allocate the first matching patient
+        4. Stop after first successful allocation
+        
+        Args:
+            freed_bed_type: Type of bed that was just freed
+        """
+        if WaitingQueueOperations.is_empty(self.system.waiting_queue):
+            return
+        
+        # Get all waiting patients (already sorted by severity)
+        waiting_ids = WaitingQueueOperations.get_all_waiting(self.system.waiting_queue)
+        
+        for next_patient_id in waiting_ids:
+            # Find patient object
+            next_patient = PatientListOperations.search_by_id(
+                self.system.patients, 
+                next_patient_id
+            )
+            
+            if next_patient is None or next_patient.status != PatientStatus.WAITING:
+                continue
+            
+            # Get requested bed type
+            requested_bed_type = getattr(next_patient, 'requested_bed_type', 'GENERAL')
+            
+            # Check if this patient needs the freed bed type
+            if requested_bed_type.upper() == freed_bed_type.upper():
+                # Remove from queue
+                # Find and remove the node from queue
+                for idx, node in enumerate(self.system.waiting_queue.queue):
+                    if node.patient_id == next_patient_id:
+                        self.system.waiting_queue.queue.remove(node)
+                        remove_from_waiting_queue_db(next_patient_id)
+                        break
+                
+                # Try to allocate
+                success, msg = self._allocate_to_icu(next_patient, freed_bed_type)
+                if success:
+                    print(f"✓ Allocated freed {freed_bed_type} bed to waiting patient {next_patient_id}")
+                    return  # Successfully allocated, stop processing
+                else:
+                    # If allocation fails, re-queue (maintains severity order)
+                    WaitingQueueOperations.enqueue(
+                        self.system.waiting_queue,
+                        next_patient_id,
+                        next_patient.severity_level
+                    )
+                    queue_size = WaitingQueueOperations.get_size(self.system.waiting_queue)
+                    save_to_waiting_queue_db(next_patient_id, next_patient.severity_level, queue_size)
+                    print(f"⚠ Could not allocate {freed_bed_type} bed to {next_patient_id}: {msg}")
+                    return  # Stop after first attempt
     
     # SYSTEM STATUS & REPORTING
     def get_system_status(self) -> dict:
@@ -306,17 +449,41 @@ class ICUAllocator:
         """
         free_beds = BedArrayOperations.count_free_beds(self.system.beds)
         total_beds = self.system.beds.num_beds
+        occupied_beds = total_beds - free_beds
+        
+        # Calculate doctor metrics
+        total_doctor_capacity = sum(d.max_capacity for d in self.system.doctors.heap)
+        total_doctor_workload = sum(d.current_workload for d in self.system.doctors.heap)
+        avg_doctor_workload = total_doctor_workload / len(self.system.doctors.heap) if self.system.doctors.heap else 0
+        
+        # Calculate occupancy rate
+        occupancy_rate = (occupied_beds / total_beds * 100) if total_beds > 0 else 0
         
         return {
+            # Patient metrics
             'total_patients': self.system.patients.size,
-            'patients_in_icu': sum(1 for b in self.system.beds.beds if b.is_occupied),
+            'patients_in_icu': occupied_beds,
             'patients_waiting': WaitingQueueOperations.get_size(self.system.waiting_queue),
             'patients_discharged': self._count_discharged(),
-            'beds_occupied': total_beds - free_beds,
+            
+            # Bed metrics (with aliases for compatibility)
+            'beds_occupied': occupied_beds,
+            'occupied_beds': occupied_beds,
             'beds_free': free_beds,
+            'available_beds': free_beds,
             'beds_total': total_beds,
+            'total_beds': total_beds,
+            'occupancy_rate': occupancy_rate,
+            
+            # Doctor metrics
             'doctors_active': len(self.system.doctors.heap),
-            'total_allocations': AllocationLogOperations.get_total_count(self.system.allocation_log)
+            'total_doctors': len(self.system.doctors.heap),
+            'average_doctor_workload': avg_doctor_workload,
+            'total_doctor_capacity': total_doctor_capacity,
+            
+            # Allocation metrics
+            'total_allocations': AllocationLogOperations.get_total_count(self.system.allocation_log),
+            'waiting_queue_size': WaitingQueueOperations.get_size(self.system.waiting_queue)
         }
     
     def _count_discharged(self) -> int:

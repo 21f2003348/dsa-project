@@ -23,31 +23,34 @@ class WaitingQueueOperations:
         """
         Algorithm:
         1. Create WaitingQueueNode with patient_id and priority
-        2. Append to queue list
+        2. Insert into queue maintaining severity order (lower severity number = higher priority)
+        3. Lower severity numbers (1-10) get priority, with 1 being most critical
         
-        Time: O(1) amortized
+        Time: O(n) where n is queue size (insertion sort)
         Space: O(1)
         """
         waiting_node = WaitingQueueNode(patient_id, priority_snapshot)
-
-        # No direct append available so we are manually going to do that logic 
-        if priority_snapshot == 1:
-            waiting_queue.queue.appendleft(waiting_node)
-            return True
-        elif priority_snapshot == 2:
-            if len(waiting_queue.queue) == 0:
-                waiting_queue.queue.append(waiting_node)
-                return True
-            else:
-                for index, node in enumerate(waiting_queue.queue):
-                    if node.priority_snapshot == 3:
-                        waiting_queue.queue.insert(index, waiting_node)
-                        return True
-                waiting_queue.queue.append(waiting_node)
-                return True
-        else:    
+        
+        # If queue is empty, just append
+        if len(waiting_queue.queue) == 0:
             waiting_queue.queue.append(waiting_node)
             return True
+        
+        # Insert based on severity (lower number = higher priority)
+        # Find the right position to maintain priority order
+        inserted = False
+        for index, node in enumerate(waiting_queue.queue):
+            # Lower severity number means higher priority, so insert before nodes with higher severity
+            if priority_snapshot < node.priority_snapshot:
+                waiting_queue.queue.insert(index, waiting_node)
+                inserted = True
+                break
+        
+        # If not inserted, append to end (lowest priority)
+        if not inserted:
+            waiting_queue.queue.append(waiting_node)
+        
+        return True
     
     @staticmethod
     def dequeue(waiting_queue: WaitingQueueFIFO) -> Optional[str]:

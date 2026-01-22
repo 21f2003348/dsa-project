@@ -7,6 +7,7 @@ class PatientStatus(Enum):
     WAITING = "WAITING"           # Awaiting bed
     IN_ICU = "IN_ICU"             # Currently in ICU bed
     DISCHARGED = "DISCHARGED"     # Left ICU
+    STABLE = "STABLE"             # Registered but no bed required
 
 
 class DoctorSpecialization(Enum):
@@ -44,7 +45,7 @@ class Patient:
         self.age: int = age
         
         # Medical Classification
-        self.severity_level: int = severity_level  # Range: 1-5
+        self.severity_level: int = severity_level  # Range: 1-10 (1=Critical, 10=Stable)
         self.medical_notes: str = medical_notes
         
         # Lifecycle Management

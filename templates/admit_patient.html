@@ -1,0 +1,169 @@
+{% extends "base.html" %} {% block title %}Admit Patient - ICU Management
+System{% endblock %} {% block content %}
+<h2
+  style="
+    margin-bottom: 30px;
+    color: var(--dark);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  "
+>
+  <i class="fas fa-user-plus" style="color: var(--primary)"></i>
+  Admit New Patient
+</h2>
+
+<div class="card" style="max-width: 700px; margin: 0 auto">
+  <form method="POST" action="/patients/admit">
+    <div class="form-group">
+      <label for="patient_id">
+        <i class="fas fa-id-card"></i> Patient ID
+      </label>
+      <input
+        type="text"
+        id="patient_id"
+        name="patient_id"
+        value="{{ next_patient_id }}"
+        placeholder="Auto-generated or enter custom ID"
+      />
+      <small style="color: var(--gray); display: block; margin-top: 5px">
+        Leave as is for auto-generated ID
+      </small>
+    </div>
+
+    <div class="form-group">
+      <label for="name"> <i class="fas fa-user"></i> Patient Name * </label>
+      <input
+        type="text"
+        id="name"
+        name="name"
+        required
+        placeholder="Enter patient's full name"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="age"> <i class="fas fa-birthday-cake"></i> Age * </label>
+      <input
+        type="number"
+        id="age"
+        name="age"
+        required
+        min="0"
+        max="150"
+        placeholder="Enter patient's age"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="severity">
+        <i class="fas fa-heartbeat"></i> Severity Level * (1-10)
+      </label>
+      <input
+        type="range"
+        id="severity"
+        name="severity"
+        min="1"
+        max="10"
+        value="5"
+        oninput="
+          document.getElementById('severityValue').textContent = this.value
+        "
+        style="width: 100%"
+      />
+      <div
+        style="display: flex; justify-content: space-between; margin-top: 10px"
+      >
+        <span style="color: var(--danger)">Critical (1)</span>
+        <span
+          style="font-weight: 700; font-size: 1.2rem; color: var(--primary)"
+        >
+          Level: <span id="severityValue">5</span>
+        </span>
+        <span style="color: var(--success)">Stable (10)</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="medical_notes">
+        <i class="fas fa-notes-medical"></i> Medical Notes
+      </label>
+      <textarea
+        id="medical_notes"
+        name="medical_notes"
+        rows="4"
+        placeholder="Enter any relevant medical information..."
+      ></textarea>
+    </div>
+
+    <div
+      class="form-group"
+      style="
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid var(--primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      "
+    >
+      <input
+        type="checkbox"
+        id="needs_bed"
+        name="needs_bed"
+        checked
+        style="width: 20px; height: 20px"
+      />
+      <label
+        for="needs_bed"
+        style="margin: 0; font-weight: 600; cursor: pointer"
+      >
+        Requires Bed Allocation
+      </label>
+      <select id="bed_type" name="bed_type" style="margin-left: 20px">
+        <option value="GENERAL">General</option>
+        <option value="VENTILATOR">Ventilator</option>
+        <option value="ISOLATION">Isolation</option>
+      </select>
+    </div>
+
+    <div style="display: flex; gap: 15px; margin-top: 30px">
+      <button type="submit" class="btn btn-primary" style="flex: 1">
+        <i class="fas fa-check"></i> Admit Patient
+      </button>
+      <a href="/" class="btn btn-secondary">
+        <i class="fas fa-times"></i> Cancel
+      </a>
+    </div>
+  </form>
+</div>
+
+<div
+  class="card"
+  style="max-width: 700px; margin: 30px auto; background: var(--light)"
+>
+  <h4 style="margin-bottom: 15px; color: var(--dark)">
+    <i class="fas fa-info-circle" style="color: var(--primary)"></i>
+    Admission Process
+  </h4>
+  <ul style="list-style: none; padding: 0">
+    <li style="padding: 10px 0; border-bottom: 1px solid var(--border)">
+      <i class="fas fa-check" style="color: var(--success)"></i>
+      System will automatically allocate the best available bed
+    </li>
+    <li style="padding: 10px 0; border-bottom: 1px solid var(--border)">
+      <i class="fas fa-check" style="color: var(--success)"></i>
+      Doctor will be assigned based on workload and specialization
+    </li>
+    <li style="padding: 10px 0; border-bottom: 1px solid var(--border)">
+      <i class="fas fa-check" style="color: var(--success)"></i>
+      If no beds available, patient will be added to waiting queue
+    </li>
+    <li style="padding: 10px 0">
+      <i class="fas fa-check" style="color: var(--success)"></i>
+      Higher severity patients get priority allocation
+    </li>
+  </ul>
+</div>
+{% endblock %}

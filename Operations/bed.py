@@ -27,7 +27,7 @@ class BedArrayOperations:
     """
     
     @staticmethod
-    def find_free_bed(bed_array: ICUBedArray) -> Optional[int]:
+    def find_free_bed(bed_array: ICUBedArray, bed_type: str = None) -> Optional[int]:
         """
         Algorithm:
         1. Loop through all beds (0 to num_beds-1)
@@ -45,8 +45,12 @@ class BedArrayOperations:
 
         for bed in bed_array.beds:
             if not bed.is_occupied:
-                return bed.bed_id
-        
+                if bed_type is None:
+                    return bed.bed_id
+                # Compare bed types (handle both string and enum)
+                bed_type_value = bed.bed_type.value if hasattr(bed.bed_type, 'value') else str(bed.bed_type)
+                if bed_type_value.upper() == bed_type.upper():
+                    return bed.bed_id
         return None
     
     @staticmethod
